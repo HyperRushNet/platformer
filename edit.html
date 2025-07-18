@@ -1,48 +1,58 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8" />
-<title>Platformer Editor met Rotatie</title>
-<style>
-  body { margin: 0; background:#111; color:#eee; font-family: monospace; }
-  #editor {
-    position: relative;
-    width: 800px; height: 600px;
-    background: #222;
-    margin: 20px auto;
-    user-select:none;
-  }
-  .obj {
-    position: absolute;
-    border: 2px solid #0f0;
-    background: #050;
-    box-sizing: border-box;
-    cursor: grab;
-  }
-  #jsonOut {
-    width: 800px; height: 150px;
-    margin: 10px auto;
-    background:#111; color:#0f0;
-    font-family: monospace;
-    overflow:auto;
-    white-space: pre-wrap;
-    padding:10px;
-  }
-  button {
-    display:block;
-    margin:10px auto;
-    padding:10px 20px;
-    background:#080;
-    border:none;
-    color:#efe;
-    cursor:pointer;
-    font-weight:bold;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <title>Platformer Editor met Rotatie & Speler Start</title>
+  <style>
+    body { margin: 0; background: #111; color: #eee; font-family: monospace; }
+    #editor {
+      position: relative;
+      width: 800px; height: 600px;
+      background: #222;
+      margin: 20px auto;
+      user-select: none;
+    }
+    .obj {
+      position: absolute;
+      border: 2px solid #0f0;
+      background: #050;
+      box-sizing: border-box;
+      cursor: grab;
+    }
+    #playerDot {
+      width: 20px; height: 20px;
+      background: red;
+      border-radius: 50%;
+      position: absolute;
+      cursor: pointer;
+      z-index: 10;
+    }
+    #jsonOut {
+      width: 800px; height: 150px;
+      margin: 10px auto;
+      background: #111; color: #0f0;
+      font-family: monospace;
+      overflow: auto;
+      white-space: pre-wrap;
+      padding: 10px;
+    }
+    button {
+      display: block;
+      margin: 10px auto;
+      padding: 10px 20px;
+      background: #080;
+      border: none;
+      color: #efe;
+      cursor: pointer;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
 
-<div id="editor"></div>
+<div id="editor">
+  <div id="playerDot"></div>
+</div>
 <button id="addPlatform">Voeg Platform Toe</button>
 <button id="exportJson">Exporteer JSON</button>
 <pre id="jsonOut"></pre>
@@ -51,35 +61,36 @@
   const editor = document.getElementById('editor');
   const jsonOut = document.getElementById('jsonOut');
   const addBtn = document.getElementById('addPlatform');
+  const playerDot = document.getElementById('playerDot');
+
+  const SCALE = 50;
+
+  let playerStart = { x: 2, y: 5 };
 
   let objects = [];
   let selected = null;
-  let offsetX=0, offsetY=0;
+  let offsetX = 0, offsetY = 0;
   let rotateMode = false;
 
-  const SCALE = 50; // 1 unit = 50 pixels
-
-  function createObj(x,y,w=3,h=1,angle=0){
+  function createObj(x, y, w = 3, h = 1, angle = 0) {
     const div = document.createElement('div');
     div.className = 'obj';
-    div.style.width = (w*SCALE)+'px';
-    div.style.height = (h*SCALE)+'px';
-    div.style.left = (x*SCALE) + 'px';
-    div.style.top = (y*SCALE) + 'px';
+    div.style.width = (w * SCALE) + 'px';
+    div.style.height = (h * SCALE) + 'px';
+    div.style.left = (x * SCALE) + 'px';
+    div.style.top = (y * SCALE) + 'px';
     div.style.transformOrigin = 'center center';
     div.style.transform = `rotate(${angle}deg)`;
     editor.appendChild(div);
 
-    const obj = {div, x, y, w, h, angle};
+    const obj = { div, x, y, w, h, angle };
     objects.push(obj);
 
     div.addEventListener('mousedown', e => {
-      if(e.shiftKey){
-        // start rotate mode
+      if (e.shiftKey) {
         selected = obj;
         rotateMode = true;
       } else {
-        // start drag mode
         selected = obj;
         offsetX = e.clientX - div.getBoundingClientRect().left;
         offsetY = e.clientY - div.getBoundingClientRect().top;
@@ -91,27 +102,25 @@
     return obj;
   }
 
-  function onMouseMove(e){
-    if(!selected) return;
-    if(rotateMode){
+  function onMouseMove(e) {
+    if (!selected) return;
+
+    if (rotateMode) {
       const rect = selected.div.getBoundingClientRect();
-      const cx = rect.left + rect.width/2;
-      const cy = rect.top + rect.height/2;
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
       const dx = e.clientX - cx;
       const dy = e.clientY - cy;
-      let angle = Math.atan2(dy, dx)*180/Math.PI + 90;
-      if(angle<0) angle+=360;
+      let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+      if (angle < 0) angle += 360;
       angle = Math.round(angle);
       selected.angle = angle;
       selected.div.style.transform = `rotate(${angle}deg)`;
     } else {
       let newX = e.clientX - editor.getBoundingClientRect().left - offsetX;
       let newY = e.clientY - editor.getBoundingClientRect().top - offsetY;
-
-      // constrain inside editor
       newX = Math.max(0, Math.min(newX, editor.clientWidth - selected.div.clientWidth));
       newY = Math.max(0, Math.min(newY, editor.clientHeight - selected.div.clientHeight));
-
       selected.x = newX / SCALE;
       selected.y = newY / SCALE;
       selected.div.style.left = newX + 'px';
@@ -120,25 +129,9 @@
     updateJSON();
   }
 
-  function onMouseUp(){
+  function onMouseUp() {
     selected = null;
     rotateMode = false;
-  }
-
-  function updateJSON(){
-    const data = {
-      gravity: -25,
-      playerStart: {x: 2, y: 5},
-      objects: objects.map(o => ({
-        type: 'platform',
-        x: Number(o.x.toFixed(2)),
-        y: Number(o.y.toFixed(2)),
-        width: Number(o.w.toFixed(2)),
-        height: Number(o.h.toFixed(2)),
-        angle: Number(o.angle.toFixed(0))
-      }))
-    };
-    jsonOut.textContent = JSON.stringify(data, null, 2);
   }
 
   addBtn.addEventListener('click', () => {
@@ -146,11 +139,60 @@
     updateJSON();
   });
 
-  window.addEventListener('mousemove', onMouseMove);
+  // Drag voor spelerDot
+  playerDot.addEventListener('mousedown', e => {
+    selected = 'playerDot';
+    offsetX = e.offsetX;
+    offsetY = e.offsetY;
+    e.preventDefault();
+  });
+
+  function movePlayerDot(e) {
+    if (selected !== 'playerDot') return;
+    let x = e.clientX - editor.getBoundingClientRect().left - offsetX;
+    let y = e.clientY - editor.getBoundingClientRect().top - offsetY;
+
+    x = Math.max(0, Math.min(x, editor.clientWidth - 20));
+    y = Math.max(0, Math.min(y, editor.clientHeight - 20));
+
+    playerDot.style.left = x + 'px';
+    playerDot.style.top = y + 'px';
+    playerStart.x = +(x + 10) / SCALE;
+    playerStart.y = +(y + 10) / SCALE;
+
+    updateJSON();
+  }
+
+  window.addEventListener('mousemove', e => {
+    movePlayerDot(e);
+    onMouseMove(e);
+  });
+
   window.addEventListener('mouseup', onMouseUp);
 
-  // start met 1 platform
-  createObj(2,4,3,1,0);
+  function updateJSON() {
+    const data = {
+      gravity: -25,
+      playerStart: {
+        x: +playerStart.x.toFixed(2),
+        y: +playerStart.y.toFixed(2)
+      },
+      objects: objects.map(o => ({
+        type: 'platform',
+        x: +o.x.toFixed(2),
+        y: +o.y.toFixed(2),
+        width: +o.w.toFixed(2),
+        height: +o.h.toFixed(2),
+        angle: +o.angle.toFixed(0)
+      }))
+    };
+    jsonOut.textContent = JSON.stringify(data, null, 2);
+  }
+
+  // Init
+  createObj(2, 4, 3, 1, 0);
+  playerDot.style.left = (playerStart.x * SCALE - 10) + 'px';
+  playerDot.style.top = (playerStart.y * SCALE - 10) + 'px';
   updateJSON();
 </script>
 
