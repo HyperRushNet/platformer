@@ -1,107 +1,119 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html>
 <head>
-<meta charset="UTF-8" />
-<title>Platformer Game met Rotatie</title>
-<style>
-  body, html { margin:0; overflow:hidden; background:#111; }
-  canvas { background:#222; display:block; margin:auto; }
-</style>
+  <meta charset="UTF-8" />
+  <title>Platformer Game</title>
+  <style>
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+    }
+    canvas {
+      display: block;
+      background: #222;
+    }
+  </style>
 </head>
 <body>
 <canvas id="game" width="800" height="600"></canvas>
 <script src="https://cdn.jsdelivr.net/npm/p2@0.7.1/build/p2.min.js"></script>
 <script>
-  const c = document.getElementById('game');
-  const ctx = c.getContext('2d');
-  const SCALE = 50;
+const SCALE = 50;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let world, player, data;
 
-  const world = new p2.World({ gravity: [0, -25] });
-  world.solver.iterations = 10;
+fetch('https://api.codetabs.com/v1/proxy/?quest=https://hrn-host.vercel.app/data.json')
+  .then(res => res.json())
+  .then(json => {
+    data = json;
+    setup();
+    requestAnimationFrame(loop);
+  });
+
+function setup() {
+  world = new p2.World({ gravity: [0, data.gravity || -25] });
 
   // Player
-  const player = new p2.Body({ mass:1, position:[2,5], fixedRotation: true });
-  player.addShape(new p2.Circle({ radius: 0.5 }));
+  player = new p2.Body({
+    mass: 1,
+    position: [data.playerStart.x, data.playerStart.y],
+    damping: 0.1,
+  });
+  const shape = new p2.Box({ width: 0.6, height: 1 });
+  player.addShape(shape);
   world.addBody(player);
 
-  // Keyboard
-  const keys = {};
-  window.addEventListener('keydown', e => keys[e.key] = true);
-  window.addEventListener('keyup', e => keys[e.key] = false);
+  // Platforms
+  for (let o of data.objects) {
+    if (o.type === 'platform') {
+      const b = new p2.Body({
+        mass: 0,
+        position: [o.x, o.y],
+        angle: (o.angle || 0) * Math.PI / 180
+      });
+      b.addShape(new p2.Box({
+        width: o.width,
+        height: o.height
+      }));
+      world.addBody(b);
+    }
+  }
+
+  // Input
+  keys = {};
+  addEventListener('keydown', e => keys[e.code] = true);
+  addEventListener('keyup', e => keys[e.code] = false);
+}
+
+function handleControls() {
+  if (!player) return;
+  const speed = 7;
+
+  if (keys['ArrowLeft']) player.velocity[0] = -speed;
+  else if (keys['ArrowRight']) player.velocity[0] = speed;
+  else player.velocity[0] = 0;
+
+  const onGround = world.narrowphase.contactEquations.some(eq =>
+    eq.bodyA === player || eq.bodyB === player
+  );
+  if (keys['ArrowUp'] && onGround) {
+    player.velocity[1] = 12;
+  }
+}
+
+function loop() {
+  handleControls();
+  world.step(1/60);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // Camera
-  let camX = 0;
-  let camY = 0;
+  const camX = player.position[0] * SCALE - canvas.width / 2;
+  const camY = (player.position[1] * SCALE - canvas.height / 2);
 
-  function addPlatform(obj){
-    const body = new p2.Body({ mass:0, position:[obj.x + obj.width/2, obj.y + obj.height/2], angle: obj.angle * Math.PI/180 });
-    const shape = new p2.Box({ width: obj.width, height: obj.height });
-    body.addShape(shape);
-    world.addBody(body);
-  }
+  // Draw all bodies
+  for (let b of world.bodies) {
+    for (let s of b.shapes) {
+      if (s instanceof p2.Box) {
+        const w = s.width * SCALE;
+        const h = s.height * SCALE;
+        const x = b.position[0] * SCALE;
+        const y = canvas.height - b.position[1] * SCALE;
 
-  fetch('https://hrn-host.vercel.app/data.json')
-    .then(r => r.json())
-    .then(json => {
-      world.gravity = [0, json.gravity];
-
-      // speler start positie
-      player.position = [json.playerStart.x, json.playerStart.y];
-
-      // platforms
-      json.objects.forEach(addPlatform);
-    })
-    .catch(console.error);
-
-  function updatePlayer() {
-    player.velocity[0] = 0;
-    if(keys['ArrowRight']) player.velocity[0] = 5;
-    if(keys['ArrowLeft']) player.velocity[0] = -5;
-    if(keys['ArrowUp'] && Math.abs(player.velocity[1]) < 0.001) player.velocity[1] = 10;
-
-    world.step(1/60);
-
-    // Camera volgt speler
-    camX = player.position[0] * SCALE - c.width/2;
-    camY = player.position[1] * SCALE - c.height/2;
-  }
-
-  function draw() {
-    ctx.clearRect(0, 0, c.width, c.height);
-    ctx.save();
-    ctx.translate(-camX, c.height + camY);
-    ctx.scale(1, -1);
-
-    // teken bodies
-    world.bodies.forEach(body => {
-      body.shapes.forEach(shape => {
         ctx.save();
-        ctx.translate(body.position[0]*SCALE, body.position[1]*SCALE);
-        ctx.rotate(body.angle);
-
-        if(shape instanceof p2.Box){
-          ctx.fillStyle = '#0f0';
-          ctx.fillRect(-shape.width/2*SCALE, -shape.height/2*SCALE, shape.width*SCALE, shape.height*SCALE);
-        }
+        ctx.translate(x - camX, y - camY);
+        ctx.rotate(-b.angle);
+        ctx.fillStyle = (b === player) ? '#0cf' : '#0f0';
+        ctx.fillRect(-w/2, -h/2, w, h);
         ctx.restore();
-      });
-    });
-
-    // teken speler
-    ctx.beginPath();
-    ctx.fillStyle = '#f00';
-    ctx.arc(player.position[0]*SCALE, player.position[1]*SCALE, 0.5*SCALE, 0, 2*Math.PI);
-    ctx.fill();
-
-    ctx.restore();
+      }
+    }
   }
 
-  function loop(){
-    updatePlayer();
-    draw();
-    requestAnimationFrame(loop);
-  }
-  loop();
+  requestAnimationFrame(loop);
+}
 </script>
 </body>
 </html>
