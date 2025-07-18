@@ -1,0 +1,183 @@
+<!-- editor.html -->
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Platformer Editor</title>
+  <style>
+    body { margin: 0; display: flex; height: 100vh; background: #222; color: #eee; font-family: monospace; }
+    #editor { flex: 1; background: #333; position: relative; }
+    .draggable {
+      position: absolute;
+      border: 2px solid #888;
+      background: #6666aa88;
+      cursor: grab;
+    }
+    .platform {
+      width: 300px;
+      height: 25px;
+      background: #888;
+      border-color: #ccc;
+    }
+    .ramp {
+      width: 200px;
+      height: 50px;
+      clip-path: polygon(0% 100%, 100% 100%, 0% 0%);
+      background: sienna;
+      border-color: #c75;
+    }
+    #sidebar {
+      width: 350px;
+      background: #111;
+      padding: 10px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+    label { margin-top: 10px; display: block; }
+    input[type="number"] {
+      width: 80px;
+      margin-left: 5px;
+      background: #222;
+      border: 1px solid #666;
+      color: #eee;
+      padding: 2px 4px;
+    }
+    button {
+      margin: 5px 0;
+      background: #444;
+      color: #eee;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    pre {
+      background: #000;
+      color: #0f0;
+      padding: 10px;
+      white-space: pre-wrap;
+      overflow: auto;
+      flex-grow: 1;
+    }
+  </style>
+</head>
+<body>
+
+<div id="editor"></div>
+
+<div id="sidebar">
+  <button id="addPlatform">+ Platform</button>
+  <button id="addRamp">+ Ramp</button>
+
+  <label>Speler Startpositie:
+    X <input type="number" id="playerX" step="0.1">
+    Y <input type="number" id="playerY" step="0.1">
+  </label>
+
+  <label>Zwaartekracht:
+    <input type="number" id="gravity" step="0.1">
+  </label>
+
+  <button id="export">Exporteer JSON</button>
+  <pre id="output"></pre>
+</div>
+
+<script>
+const editor = document.getElementById('editor');
+const output = document.getElementById('output');
+const playerX = document.getElementById('playerX');
+const playerY = document.getElementById('playerY');
+const gravity = document.getElementById('gravity');
+
+let data = {
+  gravity: -25,
+  playerStart: { x: 0, y: 5 },
+  objects: []
+};
+
+function createEl(type, x, y) {
+  const el = document.createElement('div');
+  el.className = `draggable ${type}`;
+  el.dataset.type = type;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  editor.appendChild(el);
+  makeDraggable(el);
+}
+
+function makeDraggable(el) {
+  el.onmousedown = e => {
+    const offsetX = e.clientX - el.offsetLeft;
+    const offsetY = e.clientY - el.offsetTop;
+    const move = e => {
+      let x = e.clientX - offsetX;
+      let y = e.clientY - offsetY;
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      updateJSON();
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  };
+}
+
+function updateJSON() {
+  const objects = [];
+  document.querySelectorAll('.draggable').forEach(el => {
+    const rect = el.getBoundingClientRect();
+    const x = (el.offsetLeft + el.offsetWidth/2 - editor.clientWidth/2)/50;
+    const y = -(el.offsetTop + el.offsetHeight/2 - editor.clientHeight/2)/50;
+    if (el.dataset.type === 'platform') {
+      objects.push({
+        type: 'platform',
+        x: +x.toFixed(2),
+        y: +y.toFixed(2),
+        width: +(el.offsetWidth / 50).toFixed(2),
+        height: +(el.offsetHeight / 50).toFixed(2)
+      });
+    } else if (el.dataset.type === 'ramp') {
+      const w = el.offsetWidth / 50;
+      const h = el.offsetHeight / 50;
+      objects.push({
+        type: 'ramp',
+        x: +x.toFixed(2),
+        y: +y.toFixed(2),
+        vertices: [[0,0],[+w.toFixed(2),0],[0,+h.toFixed(2)]]
+      });
+    }
+  });
+  data.objects = objects;
+  data.playerStart = {
+    x: +playerX.value,
+    y: +playerY.value
+  };
+  data.gravity = +gravity.value;
+  output.textContent = JSON.stringify(data, null, 2);
+}
+
+document.getElementById('addPlatform').onclick = () => {
+  createEl('platform', 100, 100);
+  updateJSON();
+};
+
+document.getElementById('addRamp').onclick = () => {
+  createEl('ramp', 300, 100);
+  updateJSON();
+};
+
+playerX.oninput = playerY.oninput = gravity.oninput = updateJSON;
+
+document.getElementById('export').onclick = updateJSON;
+
+// Init
+playerX.value = 0;
+playerY.value = 5;
+gravity.value = -25;
+updateJSON();
+</script>
+</body>
+</html>
