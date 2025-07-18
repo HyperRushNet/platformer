@@ -1,0 +1,30 @@
+{
+  "gravity": -20,
+  "objects": [
+    {
+      "type": "platform",
+      "x": -7.12,
+      "y": -6.81,
+      "width": 5.08,
+      "height": 0.58
+    },
+    {
+      "type": "platform",
+      "x": -2.06,
+      "y": -6.81,
+      "width": 5.08,
+      "height": 0.58
+    },
+    {
+      "type": "platform",
+      "x": 3,
+      "y": -6.81,
+      "width": 5.08,
+      "height": 0.58
+    }
+  ],
+  "playerStart": {
+    "x": 0,
+    "y": 5
+  }
+}
