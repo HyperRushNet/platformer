@@ -86,7 +86,7 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-fetch('./data.json')
+fetch('https://hrn-host.vercel.app/data.json')
   .then(res => res.json())
   .then(data => {
     world.gravity[1] = data.gravity;
