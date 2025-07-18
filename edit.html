@@ -5,15 +5,15 @@
   <title>Platformer Editor</title>
   <style>
     body { margin: 0; display: flex; height: 100vh; background: #222; color: #eee; font-family: monospace; }
-    #editor { flex:1; position:relative; background:#333; }
-    .draggable { position:absolute; border:2px solid #888; background:#6666aa88; cursor:grab; }
-    .platform { width:300px; height:25px; background:#888; }
-    .ramp { width:200px; height:50px; clip-path:polygon(0%100%,100%100%,0%0%); background:sienna; }
-    #sidebar { width:350px; background:#111; padding:10px; box-sizing:border-box; display:flex; flex-direction:column; }
-    label{ margin-top:10px; }
-    input{ background:#222; border:1px solid #666; color:#eee; width:80px; margin-left:5px; padding:2px 4px;}
-    button{ margin:5px 0; background:#444; color:#eee; border:none; padding:5px 10px; cursor:pointer; }
-    pre{ background:#000; color:#0f0; padding:10px; white-space:pre-wrap; overflow:auto; flex:1;}
+    #editor { flex: 1; position: relative; background: #333; }
+    .draggable { position: absolute; border: 2px solid #888; background: #6666aa88; cursor: grab; }
+    .platform { width: 300px; height: 25px; background: #888; }
+    .ramp { width: 200px; height: 50px; clip-path: polygon(0% 100%, 100% 100%, 0% 0%); background: sienna; }
+    #sidebar { width: 350px; background: #111; padding: 10px; box-sizing: border-box; display: flex; flex-direction: column; }
+    label { margin-top: 10px; }
+    input { background: #222; border: 1px solid #666; color: #eee; width: 80px; margin-left: 5px; padding: 2px 4px; }
+    button { margin: 5px 0; background: #444; color: #eee; border: none; padding: 5px 10px; cursor: pointer; }
+    pre { background: #000; color: #0f0; padding: 10px; white-space: pre-wrap; overflow: auto; flex: 1; }
   </style>
 </head>
 <body>
@@ -22,7 +22,7 @@
     <button id="addPlatform">+ Platform</button>
     <button id="addRamp">+ Ramp</button>
     <label>Speler start: X <input type="number" step="0.1" id="playerX"> Y <input type="number" step="0.1" id="playerY"></label>
-    <label>Zwaartekracht:<input type="number" step="0.1" id="gravity"></label>
+    <label>Zwaartekracht: <input type="number" step="0.1" id="gravity"></label>
     <button id="export">Exporteer JSON</button>
     <pre id="output"></pre>
   </div>
@@ -32,75 +32,107 @@
     const playerX = document.getElementById('playerX');
     const playerY = document.getElementById('playerY');
     const gravity = document.getElementById('gravity');
-    let data = {gravity:-25, playerStart:{x:0,y:5}, objects:[]};
+    let data = { gravity: -25, playerStart: { x: 0, y: 5 }, objects: [] };
 
-    function createEl(type,x=100,y=100) {
-      const el=document.createElement('div');
-      el.className=`draggable ${type}`;
-      el.dataset.type=type;
-      el.style.left=x+'px'; el.style.top=y+'px';
+    // Helper om het centroid van een object te berekenen (gebruikt voor ramps)
+    function calculateCentroid(vertices) {
+      let x = 0, y = 0;
+      for (let i = 0; i < vertices.length; i++) {
+        x += vertices[i][0];
+        y += vertices[i][1];
+      }
+      return [x / vertices.length, y / vertices.length];
+    }
+
+    // Maak het element en voeg het toe aan de editor
+    function createEl(type, x = 100, y = 100) {
+      const el = document.createElement('div');
+      el.className = `draggable ${type}`;
+      el.dataset.type = type;
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
       editor.appendChild(el);
       makeDraggable(el);
     }
-    function makeDraggable(el){
-      el.onmousedown=e=>{
-        const ox=e.clientX-el.offsetLeft, oy=e.clientY-el.offsetTop;
-        const move=e=>{
-          let x=e.clientX-ox, y=e.clientY-oy;
-          x=Math.max(0,Math.min(editor.clientWidth-el.offsetWidth,x));
-          y=Math.max(0,Math.min(editor.clientHeight-el.offsetHeight,y));
-          el.style.left=x+'px'; el.style.top=y+'px'; updateJSON();
+
+    // Maak draggable van elementen
+    function makeDraggable(el) {
+      el.onmousedown = e => {
+        const ox = e.clientX - el.offsetLeft, oy = e.clientY - el.offsetTop;
+        const move = e => {
+          let x = e.clientX - ox, y = e.clientY - oy;
+          x = Math.max(0, Math.min(editor.clientWidth - el.offsetWidth, x));
+          y = Math.max(0, Math.min(editor.clientHeight - el.offsetHeight, y));
+          el.style.left = x + 'px';
+          el.style.top = y + 'px';
+          updateJSON();
         };
-        const up=()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',up);}
-        document.addEventListener('mousemove',move);
-        document.addEventListener('mouseup',up);
+        const up = () => {
+          document.removeEventListener('mousemove', move);
+          document.removeEventListener('mouseup', up);
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
       };
     }
 
-    function updateJSON(){
-      const objs=[];
-      document.querySelectorAll('.draggable').forEach(el=>{
-        const type=el.dataset.type;
-        const cx=(el.offsetLeft+el.offsetWidth/2-editor.clientWidth/2)/50;
-        const cy=-(el.offsetTop+el.offsetHeight/2-editor.clientHeight/2)/50;
-        if(type==='platform'){
-          objs.push({type:'platform',x:+cx.toFixed(2),y:+cy.toFixed(2),width:+(el.offsetWidth/50).toFixed(2),height:+(el.offsetHeight/50).toFixed(2)});
-        } else if(type==='ramp'){
-          const w=el.offsetWidth/50, h=el.offsetHeight/50;
-          objs.push({type:'ramp',x:+cx.toFixed(2),y:+cy.toFixed(2),vertices:[[0,0],[+w.toFixed(2),0],[0,+h.toFixed(2)]]});
+    // Update de JSON met alle objecten
+    function updateJSON() {
+      const objs = [];
+      document.querySelectorAll('.draggable').forEach(el => {
+        const type = el.dataset.type;
+        const cx = (el.offsetLeft + el.offsetWidth / 2 - editor.clientWidth / 2) / 50;
+        const cy = -(el.offsetTop + el.offsetHeight / 2 - editor.clientHeight / 2) / 50;
+
+        if (type === 'platform') {
+          objs.push({ type: 'platform', x: +cx.toFixed(2), y: +cy.toFixed(2), width: +(el.offsetWidth / 50).toFixed(2), height: +(el.offsetHeight / 50).toFixed(2) });
+        } else if (type === 'ramp') {
+          const w = el.offsetWidth / 50, h = el.offsetHeight / 50;
+          const vertices = [[0, 0], [w, 0], [0, h]];
+          const centroid = calculateCentroid(vertices);
+          objs.push({ type: 'ramp', x: +cx.toFixed(2), y: +cy.toFixed(2), vertices: vertices, centroid: centroid });
         }
       });
-      data.objects=objs;
-      data.playerStart={x:+playerX.value,y:+playerY.value};
-      data.gravity=+gravity.value;
-      output.textContent=JSON.stringify(data,null,2);
+      data.objects = objs;
+      data.playerStart = { x: +playerX.value, y: +playerY.value };
+      data.gravity = +gravity.value;
+      output.textContent = JSON.stringify(data, null, 2);
     }
 
-    document.getElementById('addPlatform').onclick=()=>{
-      createEl('platform',100,100); updateJSON();
+    // Knoppen voor platformen, ramps en exporteren van JSON
+    document.getElementById('addPlatform').onclick = () => {
+      createEl('platform', 100, 100);
+      updateJSON();
     };
-    document.getElementById('addRamp').onclick=()=>{
-      createEl('ramp',300,100); updateJSON();
+    document.getElementById('addRamp').onclick = () => {
+      createEl('ramp', 300, 100);
+      updateJSON();
     };
-    playerX.oninput=playerY.oninput=gravity.oninput=updateJSON;
-    document.getElementById('export').onclick= updateJSON;
+    playerX.oninput = playerY.oninput = gravity.oninput = updateJSON;
+    document.getElementById('export').onclick = updateJSON;
 
-    // laad data vanuit URL
+    // Laad data vanuit de URL
     fetch('https://hrn-host.vercel.app/data.json')
-      .then(r=>r.json())
-      .then(json=>{
-        data=json;
-        playerX.value=data.playerStart.x;
-        playerY.value=data.playerStart.y;
-        gravity.value=data.gravity;
-        editor.innerHTML='';
-        data.objects.forEach(obj=>{
-          const px = editor.clientWidth/2 + obj.x*50 - (obj.type==='platform'?obj.width*25:obj.vertices[0][0]*25);
-          const py = editor.clientHeight/2 - obj.y*50 - (obj.type==='platform'?obj.height*25:obj.vertices[2][1]*25);
-          createEl(obj.type,px,py);
+      .then(r => r.json())
+      .then(json => {
+        data = json;
+        playerX.value = data.playerStart.x;
+        playerY.value = data.playerStart.y;
+        gravity.value = data.gravity;
+        editor.innerHTML = '';
+        data.objects.forEach(obj => {
+          const px = editor.clientWidth / 2 + obj.x * 50 - (obj.type === 'platform' ? obj.width * 25 : obj.vertices[0][0] * 25);
+          const py = editor.clientHeight / 2 - obj.y * 50 - (obj.type === 'platform' ? obj.height * 25 : obj.vertices[2][1] * 25);
+          createEl(obj.type, px, py);
         });
         updateJSON();
-      }).catch(()=>{playerX.value=0;playerY.value=5;gravity.value=-25;createEl('platform',100,100);updateJSON();});
+      }).catch(() => {
+        playerX.value = 0;
+        playerY.value = 5;
+        gravity.value = -25;
+        createEl('platform', 100, 100);
+        updateJSON();
+      });
   </script>
 </body>
 </html>
