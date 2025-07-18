@@ -1,208 +1,127 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-  <meta charset="UTF-8" />
-  <title>Platformer Editor</title>
-  <style>
-    body {
-      margin: 0;
-      background: #111;
-      color: #eee;
-      font-family: monospace;
-    }
-    #editor {
-      position: relative;
-      width: 800px;
-      height: 600px;
-      background: #222;
-      margin: 20px auto;
-      user-select: none;
-    }
-    .obj {
-      position: absolute;
-      border: 2px solid #0f0;
-      background: #050;
-      box-sizing: border-box;
-      cursor: grab;
-    }
-    #playerDot {
-      width: 20px;
-      height: 20px;
-      background: red;
-      border-radius: 50%;
-      position: absolute;
-      cursor: pointer;
-      z-index: 10;
-    }
-    #jsonOut {
-      width: 800px;
-      height: 160px;
-      margin: 10px auto;
-      background: #111;
-      color: #0f0;
-      font-family: monospace;
-      overflow: auto;
-      white-space: pre-wrap;
-      padding: 10px;
-    }
-    button {
-      display: block;
-      margin: 10px auto;
-      padding: 10px 20px;
-      background: #080;
-      border: none;
-      color: #efe;
-      cursor: pointer;
-      font-weight: bold;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Platformer Editor</title>
+    <style>
+        canvas { border: 1px solid black; }
+        body { font-family: Arial, sans-serif; }
+        #controls { margin: 10px; }
+        #angle { width: 60px; }
+    </style>
 </head>
 <body>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <div id="controls">
+        <button onclick="addPlatform()">Platform toevoegen</button>
+        <button onclick="saveToServer()">Opslaan naar server</button>
+        <label>Rotatie: <input type="number" id="angle" value="0">°</label>
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let objects = [];
+        let player = { x: 0, y: 5, radius: 0.5 };
+        let selectedObject = null;
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
 
-<div id="editor">
-  <div id="playerDot"></div>
-</div>
-<button id="addPlatform">Voeg Platform Toe</button>
-<button id="exportJson">Exporteer JSON</button>
-<pre id="jsonOut"></pre>
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height - 50);
+            ctx.scale(50, -50);
 
-<script>
-  const editor = document.getElementById('editor');
-  const jsonOut = document.getElementById('jsonOut');
-  const addBtn = document.getElementById('addPlatform');
-  const playerDot = document.getElementById('playerDot');
+            objects.forEach(obj => {
+                ctx.save();
+                ctx.translate(obj.x, obj.y);
+                ctx.rotate((obj.angle || 0) * Math.PI / 180);
+                ctx.fillStyle = 'gray';
+                ctx.fillRect(-obj.width / 2, -obj.height / 2, obj.width, obj.height);
+                ctx.restore();
+            });
 
-  const SCALE = 50;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+            ctx.restore();
+        }
 
-  let playerStart = { x: 2, y: 5 };
-  let objects = [];
-  let selected = null;
-  let offsetX = 0, offsetY = 0;
-  let rotateMode = false;
+        function addPlatform() {
+            objects.push({ type: 'platform', x: 0, y: 0, width: 3, height: 0.5, angle: 0 });
+            draw();
+        }
 
-  function createObj(x, y, w = 3, h = 1, angle = 0) {
-    const div = document.createElement('div');
-    div.className = 'obj';
-    div.style.width = (w * SCALE) + 'px';
-    div.style.height = (h * SCALE) + 'px';
-    div.style.left = (x * SCALE) + 'px';
-    div.style.top = (y * SCALE) + 'px';
-    div.style.transformOrigin = 'center center';
-    div.style.transform = `rotate(${angle}deg)`;
-    editor.appendChild(div);
+        function getMousePos(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left - canvas.width / 2) / 50;
+            const y = -(event.clientY - rect.top - canvas.height + 50) / 50;
+            return { x, y };
+        }
 
-    const obj = { div, x, y, w, h, angle };
-    objects.push(obj);
+        function isPointInRect(px, py, obj) {
+            const dx = px - obj.x;
+            const dy = py - obj.y;
+            const angle = -(obj.angle || 0) * Math.PI / 180;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            const localX = dx * cos - dy * sin;
+            const localY = dx * sin + dy * cos;
+            return Math.abs(localX) <= obj.width / 2 && Math.abs(localY) <= obj.height / 2;
+        }
 
-    div.addEventListener('mousedown', e => {
-      if (e.shiftKey) {
-        selected = obj;
-        rotateMode = true;
-      } else {
-        selected = obj;
-        offsetX = e.clientX - div.getBoundingClientRect().left;
-        offsetY = e.clientY - div.getBoundingClientRect().top;
-        rotateMode = false;
-      }
-      e.preventDefault();
-    });
+        canvas.addEventListener('mousedown', (event) => {
+            const pos = getMousePos(event);
+            selectedObject = null;
+            for (let obj of objects) {
+                if (isPointInRect(pos.x, pos.y, obj)) {
+                    selectedObject = obj;
+                    dragOffset = { x: pos.x - obj.x, y: pos.y - obj.y };
+                    isDragging = true;
+                    break;
+                }
+            }
+            if (!selectedObject && Math.hypot(pos.x - player.x, pos.y - player.y) < player.radius) {
+                selectedObject = player;
+                dragOffset = { x: pos.x - player.x, y: pos.y - player.y };
+                isDragging = true;
+            }
+        });
 
-    return obj;
-  }
+        canvas.addEventListener('mousemove', (event) => {
+            if (isDragging && selectedObject) {
+                const pos = getMousePos(event);
+                selectedObject.x = pos.x - dragOffset.x;
+                selectedObject.y = pos.y - dragOffset.y;
+                draw();
+            }
+        });
 
-  function onMouseMove(e) {
-    if (!selected) return;
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+            selectedObject = null;
+        });
 
-    if (rotateMode) {
-      const rect = selected.div.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const dx = e.clientX - cx;
-      const dy = e.clientY - cy;
-      let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-      if (angle < 0) angle += 360;
-      angle = Math.round(angle);
-      selected.angle = angle;
-      selected.div.style.transform = `rotate(${angle}deg)`;
-    } else {
-      let newX = e.clientX - editor.getBoundingClientRect().left - offsetX;
-      let newY = e.clientY - editor.getBoundingClientRect().top - offsetY;
-      newX = Math.max(0, Math.min(newX, editor.clientWidth - selected.div.clientWidth));
-      newY = Math.max(0, Math.min(newY, editor.clientHeight - selected.div.clientHeight));
-      selected.x = newX / SCALE;
-      selected.y = newY / SCALE;
-      selected.div.style.left = newX + 'px';
-      selected.div.style.top = newY + 'px';
-    }
-    updateJSON();
-  }
+        document.getElementById('angle').addEventListener('input', (event) => {
+            if (selectedObject && selectedObject.type === 'platform') {
+                selectedObject.angle = parseFloat(event.target.value) || 0;
+                draw();
+            }
+        });
 
-  function onMouseUp() {
-    selected = null;
-    rotateMode = false;
-  }
+        function saveToServer() {
+            const data = {
+                gravity: -25,
+                playerStart: { x: player.x, y: player.y },
+                objects: objects
+            };
+            // Simulatie van opslaan naar server (Vercel laat geen directe writes toe)
+            console.log('JSON opgeslagen:', JSON.stringify(data, null, 2));
+            alert('JSON opgeslagen in console (Vercel laat geen directe writes toe).');
+        }
 
-  addBtn.addEventListener('click', () => {
-    createObj(2, 2);
-    updateJSON();
-  });
-
-  // Drag speler
-  playerDot.addEventListener('mousedown', e => {
-    selected = 'playerDot';
-    offsetX = e.offsetX;
-    offsetY = e.offsetY;
-    e.preventDefault();
-  });
-
-  function movePlayerDot(e) {
-    if (selected !== 'playerDot') return;
-    let x = e.clientX - editor.getBoundingClientRect().left - offsetX;
-    let y = e.clientY - editor.getBoundingClientRect().top - offsetY;
-
-    x = Math.max(0, Math.min(x, editor.clientWidth - 20));
-    y = Math.max(0, Math.min(y, editor.clientHeight - 20));
-
-    playerDot.style.left = x + 'px';
-    playerDot.style.top = y + 'px';
-    playerStart.x = +(x + 10) / SCALE;
-    playerStart.y = +(y + 10) / SCALE;
-
-    updateJSON();
-  }
-
-  window.addEventListener('mousemove', e => {
-    movePlayerDot(e);
-    onMouseMove(e);
-  });
-
-  window.addEventListener('mouseup', onMouseUp);
-
-  function updateJSON() {
-    const data = {
-      gravity: -25,
-      playerStart: {
-        x: +playerStart.x.toFixed(2),
-        y: +playerStart.y.toFixed(2)
-      },
-      objects: objects.map(o => ({
-        type: 'platform',
-        x: +(o.x + o.w / 2).toFixed(2),
-        y: +(o.y + o.h / 2).toFixed(2),
-        width: +o.w.toFixed(2),
-        height: +o.h.toFixed(2),
-        angle: +o.angle.toFixed(0)
-      }))
-    };
-    jsonOut.textContent = JSON.stringify(data, null, 2);
-  }
-
-  // Init
-  createObj(2, 4, 3, 1, 0);
-  playerDot.style.left = (playerStart.x * SCALE - 10) + 'px';
-  playerDot.style.top = (playerStart.y * SCALE - 10) + 'px';
-  updateJSON();
-</script>
-
+        draw();
+    </script>
 </body>
 </html>
