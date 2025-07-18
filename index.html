@@ -16,8 +16,29 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const scale = 50;
 const world = new p2.World({ gravity: [0, -25] });
+world.defaultContactMaterial.friction = 0.3;
+world.solver.iterations = 20; // meer stabiliteit
+world.solver.tolerance = 0.001;
+
 let player;
 let camera = { x: 0, y: 0 };
+let keys = {};
+
+addEventListener('keydown', e => keys[e.code] = true);
+addEventListener('keyup', e => keys[e.code] = false);
+
+function handleControls() {
+  const speed = 5;
+  if (!player) return;
+  if (keys['ArrowLeft']) player.velocity[0] = -speed;
+  else if (keys['ArrowRight']) player.velocity[0] = speed;
+  else player.velocity[0] = 0;
+
+  const grounded = world.narrowphase.contactEquations.some(eq =>
+    eq.bodyA === player || eq.bodyB === player
+  );
+  if (keys['ArrowUp'] && grounded) player.velocity[1] = 12;
+}
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -58,29 +79,12 @@ function draw() {
   }
 }
 
-function handleControls() {
-  const speed = 5;
-  if (!player) return;
-  if (keys['ArrowLeft']) player.velocity[0] = -speed;
-  else if (keys['ArrowRight']) player.velocity[0] = speed;
-  else player.velocity[0] = 0;
-
-  const canJump = world.narrowphase.contactEquations.some(eq =>
-    eq.bodyA === player || eq.bodyB === player
-  );
-  if (keys['ArrowUp'] && canJump) player.velocity[1] = 12;
-}
-
 function loop() {
   handleControls();
   world.step(1/60);
   draw();
   requestAnimationFrame(loop);
 }
-
-let keys = {};
-addEventListener('keydown', e => keys[e.code] = true);
-addEventListener('keyup', e => keys[e.code] = false);
 
 fetch('./data.json')
   .then(res => res.json())
@@ -89,6 +93,7 @@ fetch('./data.json')
 
     player = new p2.Body({
       mass: 1,
+      fixedRotation: true,
       position: [data.playerStart.x, data.playerStart.y]
     });
     player.addShape(new p2.Box({ width: 0.5, height: 1 }));
@@ -101,7 +106,8 @@ fetch('./data.json')
         type: p2.Body.STATIC
       });
       if (obj.type === 'platform') {
-        body.addShape(new p2.Box({ width: obj.width, height: obj.height }));
+        const shape = new p2.Box({ width: obj.width, height: obj.height });
+        body.addShape(shape);
       } else if (obj.type === 'ramp') {
         const verts = obj.vertices.map(v => [v[0], v[1]]);
         const shape = new p2.Convex({ vertices: verts });
