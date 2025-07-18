@@ -1,11 +1,10 @@
-<!-- game.html -->
 <!DOCTYPE html>
 <html lang="nl">
 <head>
   <meta charset="UTF-8">
   <title>Platformer Game</title>
   <style>
-    html, body { margin: 0; background: #111; }
+    html, body { margin: 0; background: #111; overflow: hidden; }
     canvas { display: block; margin: auto; background: #222; }
   </style>
 </head>
@@ -15,29 +14,45 @@
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const scale = 50; // pixels per meter
+const scale = 50;
 
 const world = new p2.World({ gravity: [0, -20] });
 let player;
 
-// Game render loop
+let camera = { x: 0, y: 0 };
+
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Camera volgt speler
+  if (player) {
+    camera.x = player.position[0];
+    camera.y = player.position[1];
+  }
+
   for (const body of world.bodies) {
     for (const shape of body.shapes) {
       ctx.save();
-      ctx.translate(body.position[0]*scale, canvas.height - body.position[1]*scale);
+      ctx.translate(
+        (body.position[0] - camera.x) * scale + canvas.width / 2,
+        canvas.height / 2 - (body.position[1] - camera.y) * scale
+      );
       ctx.rotate(-body.angle);
       if (shape instanceof p2.Box) {
         ctx.fillStyle = body === player ? 'cyan' : 'white';
-        ctx.fillRect(-shape.width/2*scale, -shape.height/2*scale, shape.width*scale, shape.height*scale);
+        ctx.fillRect(
+          -shape.width / 2 * scale,
+          -shape.height / 2 * scale,
+          shape.width * scale,
+          shape.height * scale
+        );
       } else if (shape instanceof p2.Convex) {
         ctx.fillStyle = 'orange';
         ctx.beginPath();
         const verts = shape.vertices;
-        ctx.moveTo(verts[0][0]*scale, -verts[0][1]*scale);
+        ctx.moveTo(verts[0][0] * scale, -verts[0][1] * scale);
         for (let i = 1; i < verts.length; i++) {
-          ctx.lineTo(verts[i][0]*scale, -verts[i][1]*scale);
+          ctx.lineTo(verts[i][0] * scale, -verts[i][1] * scale);
         }
         ctx.closePath();
         ctx.fill();
@@ -53,7 +68,6 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// Load JSON and build world
 fetch('./data.json')
   .then(res => res.json())
   .then(data => {
@@ -63,8 +77,7 @@ fetch('./data.json')
       mass: 1,
       position: [data.playerStart.x, data.playerStart.y]
     });
-    const shape = new p2.Box({ width: 0.5, height: 1 });
-    player.addShape(shape);
+    player.addShape(new p2.Box({ width: 0.5, height: 1 }));
     world.addBody(player);
 
     for (const obj of data.objects) {
