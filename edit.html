@@ -2,12 +2,18 @@
 <html lang="nl">
 <head>
   <meta charset="UTF-8" />
-  <title>Platformer Editor met Rotatie & Speler Start</title>
+  <title>Platformer Editor</title>
   <style>
-    body { margin: 0; background: #111; color: #eee; font-family: monospace; }
+    body {
+      margin: 0;
+      background: #111;
+      color: #eee;
+      font-family: monospace;
+    }
     #editor {
       position: relative;
-      width: 800px; height: 600px;
+      width: 800px;
+      height: 600px;
       background: #222;
       margin: 20px auto;
       user-select: none;
@@ -20,7 +26,8 @@
       cursor: grab;
     }
     #playerDot {
-      width: 20px; height: 20px;
+      width: 20px;
+      height: 20px;
       background: red;
       border-radius: 50%;
       position: absolute;
@@ -28,9 +35,11 @@
       z-index: 10;
     }
     #jsonOut {
-      width: 800px; height: 150px;
+      width: 800px;
+      height: 160px;
       margin: 10px auto;
-      background: #111; color: #0f0;
+      background: #111;
+      color: #0f0;
       font-family: monospace;
       overflow: auto;
       white-space: pre-wrap;
@@ -66,7 +75,6 @@
   const SCALE = 50;
 
   let playerStart = { x: 2, y: 5 };
-
   let objects = [];
   let selected = null;
   let offsetX = 0, offsetY = 0;
@@ -139,7 +147,7 @@
     updateJSON();
   });
 
-  // Drag voor spelerDot
+  // Drag speler
   playerDot.addEventListener('mousedown', e => {
     selected = 'playerDot';
     offsetX = e.offsetX;
@@ -179,8 +187,8 @@
       },
       objects: objects.map(o => ({
         type: 'platform',
-        x: +o.x.toFixed(2),
-        y: +o.y.toFixed(2),
+        x: +(o.x + o.w / 2).toFixed(2),
+        y: +(o.y + o.h / 2).toFixed(2),
         width: +o.w.toFixed(2),
         height: +o.h.toFixed(2),
         angle: +o.angle.toFixed(0)
