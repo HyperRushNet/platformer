@@ -1,89 +1,107 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-  <meta charset="UTF-8">
-  <title>Platformer Game</title>
-  <style>
-    html,body { margin:0;overflow:hidden;background:#111; }
-    canvas { display:block;margin:auto;background:#222; }
-  </style>
+<meta charset="UTF-8" />
+<title>Platformer Game met Rotatie</title>
+<style>
+  body, html { margin:0; overflow:hidden; background:#111; }
+  canvas { background:#222; display:block; margin:auto; }
+</style>
 </head>
 <body>
 <canvas id="game" width="800" height="600"></canvas>
 <script src="https://cdn.jsdelivr.net/npm/p2@0.7.1/build/p2.min.js"></script>
 <script>
-const c=document.getElementById('game'), ctx=c.getContext('2d'), scale=50;
-const world=new p2.World({gravity:[0,-25]});
-world.defaultContactMaterial.friction=0.3;
-world.solver.iterations=20;
-world.solver.tolerance=0.001;
-let player, camera={x:0,y:0}, keys={};
+  const c = document.getElementById('game');
+  const ctx = c.getContext('2d');
+  const SCALE = 50;
 
-addEventListener('keydown',e=>keys[e.code]=true);
-addEventListener('keyup',e=>keys[e.code]=false);
+  const world = new p2.World({ gravity: [0, -25] });
+  world.solver.iterations = 10;
 
-function draw(){
-  ctx.clearRect(0,0,c.width,c.height);
-  if(player){ camera.x=player.position[0]; camera.y=player.position[1]; }
-  world.bodies.forEach(body=>{
-    body.shapes.forEach(shape=>{
-      ctx.save();
-      ctx.translate((body.position[0]-camera.x)*scale + c.width/2, c.height/2 - (body.position[1]-camera.y)*scale);
-      ctx.rotate(-body.angle);
-      if(shape instanceof p2.Box){
-        ctx.fillStyle=body===player?'cyan':'white';
-        ctx.fillRect(-shape.width/2*scale, -shape.height/2*scale, shape.width*scale, shape.height*scale);
-      } else if(shape instanceof p2.Convex){
-        ctx.fillStyle='orange';
-        ctx.beginPath();
-        shape.vertices.forEach((v,i)=>{
-          ctx[i?'lineTo':'moveTo'](v[0]*scale, -v[1]*scale);
-        });
-        ctx.closePath();
-        ctx.fill();
-      }
-      ctx.restore();
-    });
-  });
-}
-function handleControls(){
-  if(!player) return;
-  if(keys['ArrowLeft']) player.velocity[0]=-5;
-  else if(keys['ArrowRight']) player.velocity[0]=5;
-  else player.velocity[0]=0;
-  const grounded = world.narrowphase.contactEquations.some(eq=>eq.bodyA===player||eq.bodyB===player);
-  if(keys['ArrowUp'] && grounded) player.velocity[1]=12;
-}
-function loop(){
-  handleControls();
-  world.step(1/60);
-  draw();
-  requestAnimationFrame(loop);
-}
-
-fetch('https://hrn-host.vercel.app/data.json')
-.then(r=>r.json())
-.then(data=>{
-  world.gravity[1]=data.gravity;
-  player=new p2.Body({mass:1, fixedRotation:true, position:[data.playerStart.x,data.playerStart.y]});
-  player.addShape(new p2.Box({width:0.5, height:1}));
+  // Player
+  const player = new p2.Body({ mass:1, position:[2,5], fixedRotation: true });
+  player.addShape(new p2.Circle({ radius: 0.5 }));
   world.addBody(player);
 
-  data.objects.forEach(obj=>{
-    const b=new p2.Body({mass:0, type:p2.Body.STATIC, position:[obj.x,obj.y]});
-    if(obj.type==='platform'){
-      b.addShape(new p2.Box({width:obj.width, height:obj.height}));
-    } else if(obj.type==='ramp'){
-      const shape=new p2.Convex({vertices:obj.vertices});
-      shape.updateTriangles();
-      shape.updateCenterOfMass();
-      shape.updateBoundingRadius();
-      b.addShape(shape);
-    }
-    world.addBody(b);
-  });
+  // Keyboard
+  const keys = {};
+  window.addEventListener('keydown', e => keys[e.key] = true);
+  window.addEventListener('keyup', e => keys[e.key] = false);
+
+  // Camera
+  let camX = 0;
+  let camY = 0;
+
+  function addPlatform(obj){
+    const body = new p2.Body({ mass:0, position:[obj.x + obj.width/2, obj.y + obj.height/2], angle: obj.angle * Math.PI/180 });
+    const shape = new p2.Box({ width: obj.width, height: obj.height });
+    body.addShape(shape);
+    world.addBody(body);
+  }
+
+  fetch('https://hrn-host.vercel.app/data.json')
+    .then(r => r.json())
+    .then(json => {
+      world.gravity = [0, json.gravity];
+
+      // speler start positie
+      player.position = [json.playerStart.x, json.playerStart.y];
+
+      // platforms
+      json.objects.forEach(addPlatform);
+    })
+    .catch(console.error);
+
+  function updatePlayer() {
+    player.velocity[0] = 0;
+    if(keys['ArrowRight']) player.velocity[0] = 5;
+    if(keys['ArrowLeft']) player.velocity[0] = -5;
+    if(keys['ArrowUp'] && Math.abs(player.velocity[1]) < 0.001) player.velocity[1] = 10;
+
+    world.step(1/60);
+
+    // Camera volgt speler
+    camX = player.position[0] * SCALE - c.width/2;
+    camY = player.position[1] * SCALE - c.height/2;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.save();
+    ctx.translate(-camX, c.height + camY);
+    ctx.scale(1, -1);
+
+    // teken bodies
+    world.bodies.forEach(body => {
+      body.shapes.forEach(shape => {
+        ctx.save();
+        ctx.translate(body.position[0]*SCALE, body.position[1]*SCALE);
+        ctx.rotate(body.angle);
+
+        if(shape instanceof p2.Box){
+          ctx.fillStyle = '#0f0';
+          ctx.fillRect(-shape.width/2*SCALE, -shape.height/2*SCALE, shape.width*SCALE, shape.height*SCALE);
+        }
+        ctx.restore();
+      });
+    });
+
+    // teken speler
+    ctx.beginPath();
+    ctx.fillStyle = '#f00';
+    ctx.arc(player.position[0]*SCALE, player.position[1]*SCALE, 0.5*SCALE, 0, 2*Math.PI);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function loop(){
+    updatePlayer();
+    draw();
+    requestAnimationFrame(loop);
+  }
   loop();
-});
 </script>
 </body>
 </html>
